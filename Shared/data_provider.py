@@ -95,13 +95,16 @@ def velo_points_2_pano(points, v_res=0.42, h_res=0.35, v_fov=(-35, 15), h_fov=(-
     return img
 
 def get_composite(entropy_calc_functor=None):
-    composite = []
+    class Composite(object):
+        pass
+
+    composite = Composite()
     composite.points = get_data()
     composite.pano = velo_points_2_pano(composite.points)
 
-    length = composite.pano.shape[0] + composite.pano.shape[1]
+    length = composite.pano.shape[0] * composite.pano.shape[1]
     # we expect 1 to 1 relationship between panorama depth view and actual 3d coords
-    assert length == composite.points.shape[0]
+    #assert length == composite.points.shape[0]
 
     composite.entropy = None # will be setted
     return composite
@@ -110,9 +113,9 @@ def get_composite(entropy_calc_functor=None):
 Iterate through every pair of 4 pano pixels
 and calculate entropy for each point
 
-*---*
+1---3
 | /
-*---*
+*---2
 
 entropy is a value that characterize form of each quad
 entropy evaluator provided by client
@@ -122,26 +125,30 @@ class entropy_calculator:
     def __init__(self, composite):
         self.composite = composite
 
-    def pano_pixel_to_point(composite, idx_x, idx_y):
-        return composite[idx_x * composite.pano.shape[0] + idx_y]
+    def pano_pixel_to_point(self, idx_x, idx_y):
+        if idx_x > self.composite.pano.shape[0] or idx_y > self.composite.pano.shape[1]:
+            return None
 
-    def get_neighbours(composite, idx_x, idx_y):
-       composite[]
+        return self.composite.points[idx_x * self.composite.pano.shape[0] + idx_y]
+
+    def get_neighbours(self, idx_x, idx_y):
+       return [self.pano_pixel_to_point(idx_x + 1, idx_y),     #1
+               self.pano_pixel_to_point(idx_x, idx_y + 1),     #2
+               self.pano_pixel_to_point(idx_x + 1, idx_y + 1)] #3
 
     def calc_entropy(self, calc_functor):
+        entropy = np.zeros(self.composite.pano.shape)
         row = self.composite.pano.shape[0]
         col = self.composite.pano.shape[1]
         for row_idx in range(row):
             for col_idx in range(col):
-                for neighbour in get_neighbours(composite, row_idx, col_idx):
-                    composite.entropy = composite.entropy + entropy_calc_functor(pano_pixel_to_point())
+                for neighbour in self.get_neighbours(row_idx, col_idx):
+                    if neighbour is not None:
+                        curr = self.pano_pixel_to_point(row_idx, col_idx)
+                        entropy[row_idx][col_idx] = entropy[row_idx][col_idx] + calc_functor(curr, neighbour)
 
+        return entropy
 
-def calculate_entropy(composite, entropy_calc_functor):
-
-
-    for idx, point in enumerate(composite.points):
-        depth
 
 #def tie_data(point_cloud, pano_view):
 #    data = []
