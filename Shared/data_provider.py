@@ -1,4 +1,5 @@
 import numpy as np
+import math
 from kitti_foundation import Kitti, Kitti_util
 
 def get_data():
@@ -94,6 +95,87 @@ def velo_points_2_pano(points, v_res=0.42, h_res=0.35, v_fov=(-35, 15), h_fov=(-
 
     return img
 
+def get_composite_II():
+    class Composite(object):
+        pass
+
+    points = get_data()
+
+    composite = Composite()
+    composite.points = points
+    composite.depth = np.sqrt(points[:, 0] ** 2 + points[:, 1] ** 2 + points[:, 2] ** 2)
+    composite.entropy = None
+    composite.row = 121
+    composite.col = 1030
+    return composite
+
+class PointInfo:
+    def __init__(self, x, y, z, dist):
+        self.x = x
+        self.y = y
+        self.z = z
+        self.dist = dist
+        self.entropy = 0
+
+def velo_points_2_pano_info(points, v_res=0.42, h_res=0.35, v_fov=(-35, 15), h_fov=(-180, 180), depth=False):
+    # Projecting to 2D
+    x = points[:, 0]
+    y = points[:, 1]
+    z = points[:, 2]
+    dist = np.sqrt(x ** 2 + y ** 2 + z ** 2)
+
+    # project point cloud to 2D point map
+    x_img = np.arctan2(-y, x) / (h_res * (np.pi / 180))
+    y_img = -(np.arctan2(z, dist) / (v_res * (np.pi / 180)))
+
+    """ filter points based on h,v FOV  """
+    x_img = fov_setting(x_img, x, y, z, dist, h_fov, v_fov)
+    y_img = fov_setting(y_img, x, y, z, dist, h_fov, v_fov)
+    dist = fov_setting(dist, x, y, z, dist, h_fov, v_fov)
+
+    x_size = int(np.ceil((h_fov[1] - h_fov[0]) / h_res))
+    y_size = int(np.ceil((v_fov[1] - v_fov[0]) / v_res))
+
+    # shift negative points to positive points (shift minimum value to 0)
+    x_offset = h_fov[0] / h_res
+    x_img = np.trunc(x_img - x_offset).astype(np.int32)
+    y_offset = v_fov[1] / v_res
+    y_fine_tune = 1
+    y_img = np.trunc(y_img + y_offset + y_fine_tune).astype(np.int32)
+
+    if depth == True:
+        # nomalize distance value & convert to depth map
+        dist = normalize_depth(dist, min_v=0, max_v=120)
+    else:
+        dist = normalize_val(dist, min_v=0, max_v=120)
+
+    class point_info(object):
+        pass
+
+    #img = np.zeros([y_size + 1, x_size + 1], np.dtype(point_info))
+    #img[y_img, x_img] = [dist, x, y, z]
+
+    # array to img
+    img = [ [ None ] * x_size ] * y_size
+    #img = np.zeros([y_size + 1, x_size + 1], dtype=np.uint8)
+    #img[y_img, x_img] = dist
+    for i in range(len(x_img)):
+        img[y_img[i]][x_img[i]] = PointInfo(x[i], y[i], z[i], dist[i])
+
+    return img
+
+
+def get_depth_map(composite, row : int):
+    map = np.copy(composite.depth)
+    while True:
+        col = len(map) / row
+        if math.ceil(col) - col == 0:
+            break
+
+        map = np.append(map, 0)
+
+    return map.reshape(row, int(math.ceil(col)))
+
 def get_composite(entropy_calc_functor=None):
     class Composite(object):
         pass
@@ -123,7 +205,7 @@ entropy evaluator provided by client
 
 class entropy_calculator:
     def __init__(self, composite):
-        self.composite = composite
+        self.composite = composite # typeof PointInfo
 
     def pano_pixel_to_point(self, idx_x, idx_y):
         if idx_x > self.composite.pano.shape[0] or idx_y > self.composite.pano.shape[1]:
@@ -162,3 +244,39 @@ class entropy_calculator:
 #                data.grid2d
 
     # todo impl
+
+
+"""
+Iterate through every pair of 4 pano pixels
+and calculate entropy for each point
+
+1---3
+| /
+*---2
+
+entropy is a value that characterize form of each quad
+entropy evaluator provided by client
+"""
+
+class entropy_calculatorX:
+    def __init__(self, point_map):
+        self.point_map = point_map # typeof PointInfo
+
+    def pano_pixel_to_point(self, idx_x, idx_y):
+        if idx_x >= len(self.point_map) or idx_y >= len(self.point_map[idx_x]):
+            return None
+
+        return self.point_map[idx_x][idx_y]
+
+    def get_neighbours(self, x, y):
+       return [self.pano_pixel_to_point(x + 1, y),     #1
+               self.pano_pixel_to_point(x, y + 1),     #2
+               self.pano_pixel_to_point(x + 1, y + 1)] #3
+
+    def calc_entropy(self, calc_functor):
+        for x in range(len(self.point_map)):
+            for y in range(len(self.point_map[x])):
+                for neighbour in self.get_neighbours(x, y):
+                    if neighbour is not None:
+                        curr = self.point_map[x][y]
+                        curr.entropy = curr.entropy + calc_functor(curr, neighbour)
