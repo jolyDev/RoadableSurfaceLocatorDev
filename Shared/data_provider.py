@@ -156,11 +156,12 @@ def velo_points_2_pano_info(points, v_res=0.42, h_res=0.35, v_fov=(-35, 15), h_f
     #img[y_img, x_img] = [dist, x, y, z]
 
     # array to img
-    img = [ [ None ] * x_size ] * y_size
-    #img = np.zeros([y_size + 1, x_size + 1], dtype=np.uint8)
-    #img[y_img, x_img] = dist
-    for i in range(len(x_img)):
-        img[y_img[i]][x_img[i]] = PointInfo(x[i], y[i], z[i], dist[i])
+    #img = [ [ None ] * x_size ] * y_size
+    #img = np.zeros([y_size + 1, x_size + 1], dtype='O')
+    img = np.full(shape=(y_size + 1, x_size + 1), fill_value=PointInfo(0, 0, 0, 0), dtype='O')
+    img[y_img, x_img] = [PointInfo(x[i], y[i], z[i], dist[i]) for i in range(len(dist))]#dist #[...]
+    #for i in range(len(x_img)):
+    #    img[y_img[i]][x_img[i]] = PointInfo(x[i], y[i], z[i], dist[i]) # todo add vidbyttya field
 
     return img
 
@@ -276,7 +277,9 @@ class entropy_calculatorX:
     def calc_entropy(self, calc_functor):
         for x in range(len(self.point_map)):
             for y in range(len(self.point_map[x])):
+                #self.point_map[x][y].entropy = x * y
                 for neighbour in self.get_neighbours(x, y):
                     if neighbour is not None:
-                        curr = self.point_map[x][y]
-                        curr.entropy = curr.entropy + calc_functor(curr, neighbour)
+                        #curr = self.point_map[x][y]
+                        self.point_map[x][y].entropy = self.point_map[x][y].entropy + calc_functor(self.point_map[x][y], neighbour)
+                        #self.point_map[x][y] = curr
