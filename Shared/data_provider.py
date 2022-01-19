@@ -246,19 +246,6 @@ class entropy_calculator:
 
     # todo impl
 
-
-"""
-Iterate through every pair of 4 pano pixels
-and calculate entropy for each point
-
-1---3
-| /
-*---2
-
-entropy is a value that characterize form of each quad
-entropy evaluator provided by client
-"""
-
 class entropy_calculatorX:
     def __init__(self, point_map):
         self.point_map = point_map # typeof PointInfo
@@ -280,6 +267,7 @@ class entropy_calculatorX:
                 #self.point_map[x][y].entropy = x * y
                 for neighbour in self.get_neighbours(x, y):
                     if neighbour is not None:
-                        #curr = self.point_map[x][y]
-                        self.point_map[x][y].entropy = self.point_map[x][y].entropy + calc_functor(self.point_map[x][y], neighbour)
-                        #self.point_map[x][y] = curr
+                        val = calc_functor(self.point_map[x][y], neighbour)
+                        if val != 0:
+                            val = (1 / val) * 1000
+                        self.point_map[x][y].entropy = self.point_map[x][y].entropy + val
